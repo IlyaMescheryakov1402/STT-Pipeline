@@ -1,0 +1,5 @@
+cython==3.0.2
+nemo_toolkit[all]
+torch==2.0.1
+ffmpeg-python==0.2.0
+click==8.0.2
