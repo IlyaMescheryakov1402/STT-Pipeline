@@ -10,7 +10,7 @@ import soundfile as sf
 import os
 import shutil
 
-from frame_vad_infer import main as vad
+from src.nemo.frame_vad_infer import main as vad
 from hydra import compose, initialize
 
 @click.command()
@@ -57,8 +57,6 @@ def pipeline(filename: str):
     with open(vad_file['rttm_filepath']) as f:
         for line in f:
             manifest.append(line)
-
-    Path(vad_folder).exists()
 
     os.makedirs(vad_folder, exist_ok=True)
 
