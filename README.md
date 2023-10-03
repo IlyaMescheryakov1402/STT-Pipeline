@@ -1,4 +1,4 @@
-# KVINT
+# STT-Pipeline
 
 ## Environment
 ```
@@ -22,7 +22,7 @@ https://colab.research.google.com/github/allegroai/clearml/blob/master/examples/
 
 Поисследовал
 
-Увидел что этот VAD работает хуже, чем VAD на фреймах
+Увидел, что этот VAD работает хуже, чем VAD на фреймах
 
 Поэтому взял пример отсюда https://github.com/NVIDIA/NeMo/blob/f477e051ec68aaa909ca891c1605383f87e11fbb/examples/asr/speech_classification/frame_vad_infer.py
 с конфигом https://github.com/NVIDIA/NeMo/blob/f477e051ec68aaa909ca891c1605383f87e11fbb/examples/asr/conf/vad/frame_vad_infer_postprocess.yaml
@@ -35,4 +35,13 @@ https://colab.research.google.com/github/allegroai/clearml/blob/master/examples/
 Получаю разметку для каждого отрывка
 
 ## Cleanup
-Удаляю все побочные файлы - папку с разметкой, папку с вавками, файл манифеста и файл преобразованной вавки
+Удаляю все побочные файлы - папку с разметкой, папку с вавками, файл манифеста и преобразованные вавки
+
+# ENTRYPOINT
+
+```
+python pipeline.py --filename Recording.wav --filename Recording1.wav
+```
+
+В результате в конце выполнения пайплайна в выводе появятся расшифровки файлов, а в корне репозитория появятся изображения работы VAD для каждого из файлов. Пример изображения представлен ниже:
+![Alt text](images/Recording.png)

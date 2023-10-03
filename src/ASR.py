@@ -1,12 +1,11 @@
 from typing import List
 
 def run_asr(
+    rttm_file: str,
     input_file: str,
     prep_file: str,
-    output_vad_file: str,
     vad_folder: str = "VAD_wavs"
 ):
-    import json
     import os
     import librosa
     from pathlib import Path
@@ -14,16 +13,15 @@ def run_asr(
     import matplotlib.pyplot as plt
     import nemo.collections.asr as nemo_asr
     import soundfile as sf
-    
-    with open(output_vad_file, "r") as user_file:
-        vad_file = json.load(user_file)
 
     manifest = []
-    with open(vad_file['rttm_filepath']) as f:
+    with open(rttm_file) as f:
         for line in f:
             manifest.append(line)
 
-    os.makedirs(vad_folder, exist_ok=True)
+    inputfile_stem = Path(input_file).stem
+    target_vad_folder = f"{vad_folder}/{inputfile_stem}"
+    os.makedirs(target_vad_folder, exist_ok=True)
 
     data, sr = librosa.load(prep_file, sr=16000)
 
@@ -31,7 +29,7 @@ def run_asr(
 
     filelist = []
     for idx, interval in enumerate(manifest):
-        file = f'{vad_folder}/wav_{idx}.wav'
+        file = f'{target_vad_folder}/wav_{idx}.wav'
         start = float(interval.split(" ")[3])
         end = float(interval.split(" ")[3]) + float(interval.split(" ")[4])
         labels[int(sr * start) : int(sr * end)] = [1] * (int(sr * end) - int(sr * start))
@@ -48,6 +46,6 @@ def run_asr(
     plt.legend()
     plt.grid()
 
-    # print(transcripts)
+    plt.savefig(inputfile_stem)
 
     return input_file, transcripts

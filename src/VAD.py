@@ -6,7 +6,7 @@ def run_vad(
     manifest_name: str,
     config_name: str,
 ):
-    initialize(config_path="./conf", job_name="test_app")
+    initialize(config_path="../conf", job_name="test_app")
     cfg = compose(
         config_name=config_name,
         return_hydra_config=True,
