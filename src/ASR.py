@@ -4,7 +4,8 @@ def run_asr(
     rttm_file: str,
     input_file: str,
     prep_file: str,
-    vad_folder: str = "VAD_wavs"
+    vad_folder: str = "VAD_wavs",
+    modelname: str = "stt_enes_contextnet_large"
 ):
     import os
     import librosa
@@ -36,7 +37,7 @@ def run_asr(
         sf.write(file, data[int(sr * start) : int(sr * end)], sr, 'PCM_24')
         filelist.append(file)
 
-    asr_model = nemo_asr.models.EncDecRNNTBPEModel.from_pretrained(model_name="stt_enes_contextnet_large")
+    asr_model = nemo_asr.models.EncDecRNNTBPEModel.from_pretrained(model_name=modelname)
     transcripts = asr_model.transcribe(paths2audio_files=filelist)[0]
 
     plt.figure(figsize=(10, 10))
