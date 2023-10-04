@@ -4,3 +4,4 @@ torch==2.0.1
 ffmpeg-python==0.2.0
 click==8.0.2
 clearml==1.13.1
+flake8==6.1.0
