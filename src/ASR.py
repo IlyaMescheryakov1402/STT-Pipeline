@@ -1,5 +1,3 @@
-from typing import List
-
 def run_asr(
     rttm_file: str,
     input_file: str,
@@ -13,7 +11,7 @@ def run_asr(
     from pathlib import Path
     import numpy as np
     import matplotlib.pyplot as plt
-    import nemo.collections.asr as nemo_asr
+    from nemo.collections.asr.models import EncDecRNNTBPEModel
     import soundfile as sf
 
     manifest = []
@@ -34,14 +32,14 @@ def run_asr(
         file = f'{target_vad_folder}/wav_{idx}.wav'
         start = float(interval.split(" ")[3])
         end = float(interval.split(" ")[3]) + float(interval.split(" ")[4])
-        labels[int(sr * start) : int(sr * end)] = [1] * (int(sr * end) - int(sr * start))
-        sf.write(file, data[int(sr * start) : int(sr * end)], sr, 'PCM_24')
+        labels[int(sr*start):int(sr*end)] = [1] * (int(sr*end) - int(sr*start))
+        sf.write(file, data[int(sr*start):int(sr*end)], sr, 'PCM_24')
         filelist.append(file)
 
     if from_clearml:
-        asr_model = nemo_asr.models.EncDecRNNTBPEModel.restore_from(modelname)
+        asr_model = EncDecRNNTBPEModel.restore_from(modelname)
     else:
-        asr_model = nemo_asr.models.EncDecRNNTBPEModel.from_pretrained(model_name=modelname)
+        asr_model = EncDecRNNTBPEModel.from_pretrained(model_name=modelname)
     transcripts = asr_model.transcribe(paths2audio_files=filelist)[0]
 
     plt.figure(figsize=(10, 10))

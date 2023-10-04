@@ -10,7 +10,10 @@ def run_vad(
     cfg = compose(
         config_name=config_name,
         return_hydra_config=True,
-        overrides=[f"input_manifest={manifest_name}", f"dataset={manifest_name}"]
+        overrides=[
+            f"input_manifest={manifest_name}",
+            f"dataset={manifest_name}"
+        ]
     )
     vad(cfg)
     return True

@@ -1,5 +1,6 @@
 from typing import List
 
+
 def create_manifest(
     filenames: List[str],
     manifest_name: str,
@@ -13,13 +14,19 @@ def create_manifest(
     prep_files = []
     for filename in filenames:
 
-        input_file_path = Path(filename)
-        prep_file = str(f"{input_file_path.stem}_preprocessed{input_file_path.suffix}")
+        file_path = Path(filename)
+        prep_file = f"{file_path.stem}_preprocessed{file_path.suffix}"
 
         prep_files.append(prep_file)
 
         audio_input = ffmpeg.input(filename)
-        audio_output = ffmpeg.output(audio_input, prep_file, format='wav', ar=16000, ac=1)
+        audio_output = ffmpeg.output(
+            audio_input,
+            prep_file,
+            format='wav',
+            ar=16000,
+            ac=1
+        )
         ffmpeg.run(audio_output)
 
         manifest = {
@@ -30,5 +37,5 @@ def create_manifest(
 
         json.dump(obj=manifest, fp=user_file)
         user_file.write('\n')
-    
+
     return prep_files
