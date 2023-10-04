@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Optional
 
 def create_manifest_clearml(
     dataset_id: str,
@@ -10,16 +10,20 @@ def create_manifest_clearml(
     import glob
     import os
 
+    # Скачиваем датасет, проверяем что скачался
     dataset_folder = clearml.Dataset.get(dataset_id=dataset_id).get_local_copy()
     print(os.system(f"ls {dataset_folder}"))
     filenames = glob.glob(f"{dataset_folder}/*.wav")
-    prep_files = create_manifest(filenames, manifest_name)
-    PipelineController.upload_artifact(name="vad_input_manifest", artifact_object=manifest_name)
 
+    # Препроцессим файлы, создаем манифест (но не используем его)
+    prep_files = create_manifest(filenames, manifest_name)
+
+    # Создаем новый датасет, куда кладем предобработанные вавки
+    pipe_id = PipelineController._get_pipeline_task().id
     ds = clearml.Dataset.create(
         dataset_name="WAV files preprocessed",
         dataset_project="Ilya",
-        parent_dateset=dataset_id
+        dataset_tags=[f"pipeline: {pipe_id}", f"parent: {dataset_id}"]
     )
     for file in prep_files:
         ds.add_files(path=file)
@@ -33,144 +37,122 @@ def run_vad_clearml(
     prep_dataset_id: str,
     config_name: str,
     output_vad_file: str,
+    manifest_name: str,
 ):
     from src.VAD import run_vad
     from clearml.automation.controller import PipelineController
-    manifest_name = PipelineController._get_pipeline_task().artifacts['vad_input_manifest'].get_local_copy()
+    import clearml
+    import glob
+    import json
+    import os
+    from pathlib import Path
 
+    # Скачиваем датасет, проверяем что скачался
     dataset_folder = clearml.Dataset.get(dataset_id=prep_dataset_id).get_local_copy()
     print(os.system(f"ls {dataset_folder}"))
-    filenames = glob.glob(f"{dataset_folder}/*.wav") # надо в манифесте заменить пути на эти пути, и сделать это до подачи в ВАД
+    prep_files = glob.glob(f"{dataset_folder}/*.wav")
 
+    # создаем манифест заново, потому что пути до данных изменены
+    with open(manifest_name, "w") as user_file:
+        for prep_file in prep_files:
+            manifest = {
+                "audio_filepath": prep_file,
+                "offset": 0,
+                "duration": None
+            }
+            print(manifest)
+            json.dump(obj=manifest, fp=user_file)
+            user_file.write('\n')
+
+    # Запускаем ВАД
     run_vad(manifest_name, config_name)
 
-    # output_vad_file = PipelineController._get_pipeline_task().artifacts['vad_output_manifest'].get_local_copy()
-    rttm_filelist = []
+
+    # Из манифеста ВАДа достаем RTTM-разметку и как артифакты
+    # подгружаем к пайплайну
     with open(output_vad_file, 'r') as manifest:
         for line in manifest.readlines():
             audio_filepath = json.loads(line.strip())['audio_filepath']
             rttm_filepath = json.loads(line.strip())['rttm_filepath']
-            # rttm_filelist.append(rttm_filepath)
+            rttm_new_name = f"rttm_{Path(audio_filepath).stem}.rttm"
             print(f"rttm_filepath: {rttm_filepath}")
-            PipelineController.upload_artifact(name=f"rttm_{audio_filepath}", artifact_object=rttm_filepath)
+            print(f"rttm_new_name: {rttm_new_name}")
+
+            PipelineController.upload_artifact(name=rttm_new_name, artifact_object=rttm_filepath)
+
     return None
 
 
 def run_asr_clearml(
-    dataset_id: str,
-    prep_files: List[str],
+    prep_dataset_id: str,
     model_id: Optional[str]
 ):
     from src.ASR import run_asr
     from clearml.automation.controller import PipelineController
     import os
-    import shutil
     import glob
     from pathlib import Path
     import pandas as pd
     import clearml
 
-    dataset_folder = clearml.Dataset.get(dataset_id=dataset_id).get_local_copy()
-    print(os.system(f"ls {dataset_folder}"))
-    filenames = glob.glob(f"{dataset_folder}/*.wav")
+    logger = clearml.Task.current_task().get_logger()
 
+    dataset_folder = clearml.Dataset.get(dataset_id=prep_dataset_id).get_local_copy()
+    print(os.system(f"ls {dataset_folder}"))
+    prep_files = glob.glob(f"{dataset_folder}/*.wav")
+
+    # Если в пайплайн передавалась конкретная модель, используем её
     if model_id is not None:
         out_model = clearml.InputModel(model_id=model_id)
         modelname = out_model.get_weights()
+        from_clearml = True
         print(modelname)
     else:
         modelname = "stt_enes_contextnet_large"
+        from_clearml = False
 
-    # output_vad_file = PipelineController._get_pipeline_task().artifacts['vad_output_manifest'].get_local_copy()
-    # rttm_filelist = []
-    # with open(output_vad_file, 'r') as manifest:
-    #     for line in manifest.readlines():
-    #         rttm_filepath = json.loads(line.strip())['rttm_filepath']
-    #         rttm_filelist.append(rttm_filepath)
 
     result_input_file = []
     result_transcripts = []
-    # for rttm_file, filename, prep_file in zip(rttm_filelist, filenames, prep_files):
-    for filename in filenames:
-        filestem = Path(filename).stem
-        rttm_file = PipelineController._get_pipeline_task().artifacts[f'rttm_{filestem}.wav'].get_local_copy()
+    for prep_file in prep_files:
 
-        input_file, transcripts = run_asr(rttm_file, filename, prep_file, modelname=modelname)
+        # достаем название изначального файла исходя из того, как было сформировано 
+        # название предобработанного файла
+        filestem = Path(prep_file).stem
+
+        # Cкачиваем соответствующий артифакт
+        rttm_file = PipelineController._get_pipeline_task().artifacts[f'rttm_{filestem}.rttm'].get_local_copy()
+
+        # Запускаем ASR
+        input_file, transcripts = run_asr(rttm_file, f"{filestem.split('_')[0]}.wav", prep_file, modelname=modelname, from_clearml=from_clearml)
+
         result_input_file.append(input_file)
         result_transcripts.append(' '.join(transcripts))
-        os.remove(prep_file)
 
+        # Логгируем изображения
+        clearml.logger.report_image(filestem.split('_')[0], "VAD results", iteration=0, image=f"{filestem.split('_')[0]}.png")
+
+    # Сохраняем наши транскрипты в файл и подгружаем как артифакт
     dictdf = {'filename': result_input_file, 'transcript': result_transcripts}
-        
     df = pd.DataFrame(dictdf)
     df.to_csv('transcript.csv')
-
-    print("RESULT:\n\n")
-    for input_file, transcripts in result:
-        print(f"{input_file}: {' '.join(transcripts)}\n")
-
     PipelineController.upload_artifact(name="transcript", artifact_object='transcript.csv')
+
+    # Логгируем результаты в вывод
+    logger.info("RESULT:\n\n")
+    assert len(result_input_file) == len(result_transcripts)
+    for idx in range(len(result_transcripts)):
+        logger.info(f"{result_input_file[idx]}: {result_transcripts[idx]}\n")
 
     return None
 
-# def pipeline(
-#     filenames: List[str],
-#     config_name: str,
-# ):
-
-#     output_vad_file = "frame_vad_outputs/manifest_vad_output.json"
-#     manifest_name = 'manifest.json'
-#     vad_folder = "VAD_wavs"
-
-#     logging.info("############################# Step 1 - preprocess files ############################")
-#     prep_files = create_manifest(filenames, manifest_name)
-
-#     logging.info("############################# Step 2 - run VAD #############################")
-#     run_vad(manifest_name, config_name)
-
-#     logging.info("############################# Step 3 - run ASR #############################")
-
-#     rttm_filelist = []
-#     with open(output_vad_file, 'r') as manifest:
-#         for line in manifest.readlines():
-#             rttm_filepath = json.loads(line.strip())['rttm_filepath']
-#             rttm_filelist.append(rttm_filepath)
-
-#     result = []
-#     for rttm_file, filename, prep_file in zip(rttm_filelist, filenames, prep_files):
-#         input_file, transcripts = run_asr(rttm_file, filename, prep_file)
-#         result.append((input_file, transcripts))
-#         os.remove(prep_file)
-
-#     shutil.rmtree(Path(output_vad_file).parent)
-#     shutil.rmtree(vad_folder)
-#     os.remove(manifest_name)
-
-#     logging.info("RESULT:\n\n")
-#     for input_file, transcripts in result:
-#         logging.info(f"{input_file}: {' '.join(transcripts)}\n")
-
-#     return None
 
 if __name__ == "__main__":
     import os
     os.environ["CLEARML_CONFIG_FILE"] = "/home/imeshcheryakov/clearml_public.conf"
 
-    # import click
-    # from pathlib import Path
-    # import shutil
-    # import json
-    # from typing import List
-
-    # from src.utils import create_manifest
-    # from src.VAD import run_vad
-    # from src.ASR import run_asr
-    # from nemo.utils import logging
 
     from clearml.automation.controller import PipelineController
-    # import os
-    # from copy import copy
-    # from dotenv import load_dotenv
 
     n_workers = 1
 
@@ -243,6 +225,7 @@ if __name__ == "__main__":
             prep_dataset_id='${create_manifest_clearml.prep_dataset_id}',
             config_name='${pipeline.config_name}',
             output_vad_file='${pipeline.output_vad_file}',
+            manifest_name='${pipeline.manifest_name}',
         ),
         project_name='', 
         repo="https://github.com/IlyaMescheryakov1402/STT-Pipeline.git", 
@@ -259,7 +242,6 @@ if __name__ == "__main__":
         name='run_asr_clearml',
         function=run_asr_clearml,
         function_kwargs=dict(
-            dataset_id='${pipeline.dataset_id}',
             prep_dataset_id='${create_manifest_clearml.prep_dataset_id}',
             model_id='${pipeline.model_id}',
         ),
@@ -273,4 +255,3 @@ if __name__ == "__main__":
     )
 
     pipe.start(queue=queue)
-    # pipe.start_locally(run_pipeline_steps_locally=True)
