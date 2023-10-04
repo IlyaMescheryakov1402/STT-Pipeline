@@ -144,8 +144,13 @@ def run_asr_clearml(
             title=filestem.split('_')[0],
             series="VAD results",
             iteration=0,
-            image=f"{filestem.split('_')[0]}.png",
+            local_path=f"{filestem.split('_')[0]}.png",
             delete_after_upload=True
+        )
+
+        PipelineController.upload_artifact(
+            name=filestem.split('_')[0],
+            artifact_object=f"{filestem.split('_')[0]}.png",
         )
 
     # Сохраняем наши транскрипты в файл и подгружаем как артифакт
