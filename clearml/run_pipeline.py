@@ -140,11 +140,12 @@ def run_asr_clearml(
         result_transcripts.append(' '.join(transcripts))
 
         # Логгируем изображения
-        logger.report_image(
+        logger.report_media(
             title=filestem.split('_')[0],
             series="VAD results",
             iteration=0,
-            image=f"{filestem.split('_')[0]}.png"
+            image=f"{filestem.split('_')[0]}.png",
+            delete_after_upload=True
         )
 
     # Сохраняем наши транскрипты в файл и подгружаем как артифакт
